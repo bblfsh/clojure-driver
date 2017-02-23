@@ -1,55 +1,57 @@
 (ns babelfish-clojure-driver.core-test
   (:require [clojure.test :refer :all]
-            [msgpack.core :as msg]
+            [clojure.data.json :as json]
             [babelfish-clojure-driver.core :refer :all]))
 
-(defn- err? [result status]
+(defn- err? 
+  [result status]
   (do (is (= (:status result) status))
       (is (nil? (:ast result)))
       (is (= (count (:errors result)) 1))))
 
-(defn- ok? [result]
-  (do (is (= (:status result) :ok))
+(defn- ok? 
+  [result status]
+  (do (is (= (:status result) status))
       (is (not (nil? (:ast result))))
       (is (= (count (:errors result)) 0))))
 
-(defn- status? [m status]
-  (is (= status (get m "status"))))
+(defn- read-str
+  [s]
+  (json/read-str s :key-fn keyword :eof-error? false :eof-value :end))
 
-(defn- stream [req]
-  (let [encoded (msg/pack req)]
-    (java.io.DataInputStream.
-     (java.io.ByteArrayInputStream. encoded))))
+(defn- stream 
+  [req]
+  (java.io.BufferedReader. (java.io.StringReader. req)))
 
 (deftest test-parse
   (testing "with valid source"
     (let [result (parse "(defn foo [a b] (+ a b))")]
-      (ok? result)))
+      (ok? result :ok)))
 
   (testing "with invalid source"
     (let [result (parse "(println (+ a 1)")]
       (err? result :error))))
 
 (deftest test-process-req
-  (testing "with non msgpack input"
+  (testing "with non json input"
     (let [result (process-req (stream "fooooo"))
-          output (msg/unpack result)]
-      (status? output "fatal")))
+          output (read-str result)]
+      (err? output "fatal")))
 
   (testing "with invalid action"
-    (let [req (stream {:action "fooobar"
-                       :content "foslkdfjslkfj"})
+    (let [req (stream (json/write-str {:action "fooobar"
+                                       :content "foslkdfjslkfj"}))
           result (process-req req)
-          output (msg/unpack result)]
-      (status? output "fatal")))
+          output (read-str result)]
+      (err? output "fatal")))
 
   (testing "with valid input"
-    (let [req (stream {:action "ParseAST"
-                       :content "(defn foo [a b]
-                                      (+ a b))"})
+    (let [req (stream (json/write-str {:action "ParseAST"
+                                       :content "(defn foo [a b]
+                                                  (+ a b))"}))
           result (process-req req)
-          output (msg/unpack result)]
-      (status? output "ok"))))
+          output (read-str result)]
+      (ok? output "ok"))))
 
 (deftest test-clean-ast
   (testing "cleaning ast"

@@ -5,11 +5,11 @@
             [clojure.tools.analyzer.ast :refer [postwalk]]
             [clojure.tools.analyzer.env :refer [with-env]]
             [clojure.tools.analyzer.passes.elide-meta :refer [elides elide-meta]]
-            [msgpack.core :as msg]
-            [babelfish-clojure-driver.msgpack-extensions]
+            [clojure.data.json :as json]
             [babelfish-clojure-driver.parse :refer [parse-recur]])
   (:import java.lang.System
-           java.io.DataInputStream)
+           java.io.InputStreamReader
+           java.io.BufferedReader)
   (:gen-class))
 
 (def empty-env {:context :ctx/statement
@@ -135,46 +135,45 @@
       (assoc :driver "clojure:1.0.0")))
 
 (defn- unpack
-  "Unpacks the request from msgpack or returns nil if it was not possible. 
-  It returns nil instead of an error because the exceptions thrown by the
-  msgpack library are not descriptive enough to understand what is going on.
-  Instead, just know that if nil is returned, the request was not correct."
+  "Unpacks the request from JSON or returns an error if it was not possible." 
   [stream]
   (try
-    (msg/unpack-stream stream)
-    (catch Exception e nil)))
+    (let [line (.readLine stream)]
+      (if (nil? line)
+        :end
+        (json/read-str line 
+                       :key-fn keyword 
+                       :eof-error? false 
+                       :eof-value :end)))
+    (catch Exception e (with-err :fatal (.getMessage e)))))
 
 (defn- pack
-  "Tries to pack the result into msgpack. If it can't do so, it will return a
-  fatal error"
+  "Tries to pack the result into JSON. If it can't do so, it will return
+  an error"
   [output]
   (try
-    (msg/pack output)
-    (catch Exception e (msg/pack (with-err :fatal (.getMessage e))))))
+    (json/write-str output)
+    (catch Exception e (json/write-str (with-err :error (.getMessage e))))))
 
 (defn process-req
-  "Processes an incoming msgpack-encoded parse request"
+  "Processes an incoming json-encoded parse request"
   [stream]
   (let [req (unpack stream)]
     (-> (cond
-          (nil? req)
-          (with-err :fatal "unable to decode request from msgpack")
+          (= req :end) (System/exit 0)
 
-          (= "ParseAST" (get req "action"))
-          (parse (get req "content"))
+          (= (:status req) :fatal) req
 
-          :else
-          (with-err :fatal (str "unknown action: " (get req "action"))))
+          (= "ParseAST" (:action req)) (parse (:content req))
+
+          :else (with-err :fatal 
+                  (str "unknown action: " (:action req))))
         (label)
         (pack))))
 
-(defn- write
-  "Writes the output to the standard output"
-  [output]
-  (.write System/out output))
-
 (defn -main
   [& args]
-  (-> (DataInputStream. System/in)
-      (process-req)
-      (write)))
+  (loop [r (BufferedReader. (InputStreamReader. System/in))]
+    (do
+      (-> r process-req println)
+      (recur r))))
