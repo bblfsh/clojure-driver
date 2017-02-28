@@ -75,6 +75,22 @@
    :errors [{:level :error
              :message msg}]})
 
+(defn- clean-ast-entry [clean-ast entry]
+  (let [k (first entry)
+        v (second entry)]
+    (cond
+      (= k :env) nil
+      (= k :raw-forms) nil
+      (= k :var) nil
+
+      (coll? k) (if (= (str (first k)) "quote")
+                  (vector (str "'" (str (last k)))
+                          (clean-ast v))
+                  (vector k
+                          (clean-ast v)))
+
+      :else (vector k (clean-ast v)))))
+
 (defn clean-ast
   "Removes the :env map from the AST nodes and converts quoted symbols to
   string preceded by ' because, even if in Clojure is ok to have collections
@@ -84,22 +100,7 @@
   (cond
     (map? m) (into {}
                    (filter (comp not nil?)
-                           (map (fn [entry]
-                                  (let [k (first entry)
-                                        v (second entry)]
-                                    (cond
-                                      (= k :env) nil
-                                      (= k :raw-forms) nil
-                                      (= k :var) nil
-
-                                      (coll? k) (if (= (str (first k)) "quote")
-                                                  (vector (str "'" (str (last k)))
-                                                          (clean-ast v))
-                                                  (vector k
-                                                          (clean-ast v)))
-
-                                      :else (vector k (clean-ast v)))))
-                                m)))
+                           (map (partial clean-ast-entry clean-ast) m)))
 
     (coll? m) (map clean-ast m)
 
