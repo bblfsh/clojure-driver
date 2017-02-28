@@ -4,7 +4,8 @@
             [clojure.tools.analyzer.jvm :as ana.jvm]
             [clojure.tools.analyzer.ast :refer [postwalk]]
             [clojure.tools.analyzer.env :refer [with-env]]
-            [clojure.tools.analyzer.passes.elide-meta :refer [elides elide-meta]]
+            [clojure.tools.analyzer.passes.elide-meta :refer [elide-meta]]
+            [clojure.tools.analyzer.passes.source-info :refer [source-info]]
             [clojure.data.json :as json]
             [babelfish-clojure-driver.parse :refer [parse-recur]])
   (:import java.lang.System
@@ -63,6 +64,7 @@
             ana/var?         var?]
     (with-env env
       (-> (ana/analyze form empty-env)
+          (postwalk source-info)
           (postwalk elide-meta)))))
 
 (defn- with-err
@@ -126,14 +128,6 @@
      :errors []}
     (catch Exception e (with-err :error (.getMessage e)))))
 
-(defn- label
-  "Adds the language, language version and driver to the output map"
-  [output]
-  (-> output
-      (assoc :language "clojure")
-      (assoc :language_version "1.0.0")
-      (assoc :driver "clojure:1.0.0")))
-
 (defn- unpack
   "Unpacks the request from JSON or returns an error if it was not possible." 
   [stream]
@@ -159,21 +153,20 @@
   "Processes an incoming json-encoded parse request"
   [stream]
   (let [req (unpack stream)]
-    (-> (cond
+    (pack (cond
           (= req :end) (System/exit 0)
 
+          ;; if req has status it means the unpack failed and it was converted
+          ;; to a result
           (= (:status req) :fatal) req
 
-          (= "ParseAST" (:action req)) (parse (:content req))
-
-          :else (with-err :fatal 
-                  (str "unknown action: " (:action req))))
-        (label)
-        (pack))))
+          :else (parse (:content req))))))
 
 (defn -main
   [& args]
   (loop [r (BufferedReader. (InputStreamReader. System/in))]
     (do
-      (-> r process-req println)
+      (-> r 
+          process-req 
+          println)
       (recur r))))

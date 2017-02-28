@@ -38,16 +38,8 @@
           output (read-str result)]
       (err? output "fatal")))
 
-  (testing "with invalid action"
-    (let [req (stream (json/write-str {:action "fooobar"
-                                       :content "foslkdfjslkfj"}))
-          result (process-req req)
-          output (read-str result)]
-      (err? output "fatal")))
-
   (testing "with valid input"
-    (let [req (stream (json/write-str {:action "ParseAST"
-                                       :content "(defn foo [a b]
+    (let [req (stream (json/write-str {:content "(defn foo [a b]
                                                   (+ a b))"}))
           result (process-req req)
           output (read-str result)]
