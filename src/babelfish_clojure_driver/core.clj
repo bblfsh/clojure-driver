@@ -4,7 +4,7 @@
             [clojure.tools.analyzer.jvm :as ana.jvm]
             [clojure.tools.analyzer.ast :refer [postwalk]]
             [clojure.tools.analyzer.env :refer [with-env]]
-            [clojure.tools.analyzer.passes.elide-meta :refer [elide-meta]]
+            [clojure.tools.analyzer.passes.elide-meta :refer [elides elide-meta]]
             [clojure.tools.analyzer.passes.source-info :refer [source-info]]
             [clojure.data.json :as json]
             [babelfish-clojure-driver.parse :refer [parse-recur]])
@@ -57,11 +57,10 @@
   "Returns the AST of a single Clojure form without the macros expanded"
   [form]
   (binding [ana/macroexpand-1 (fn [form env] form)
-            ana/create-var   (fn [sym env]
-                               (doto (intern (:ns env) sym)
-                                 (reset-meta! (meta sym))))
-            ana/parse        parse-forms
-            ana/var?         var?]
+            ana/create-var    ana.jvm/create-var
+            ana/parse         parse-forms
+            elides            {:all #{:line :column}}
+            ana/var?          var?]
     (with-env env
       (-> (ana/analyze form empty-env)
           (postwalk source-info)
