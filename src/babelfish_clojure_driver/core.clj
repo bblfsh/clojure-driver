@@ -6,7 +6,7 @@
             [clojure.tools.analyzer.jvm :as ana.jvm]
             [clojure.tools.analyzer.env :refer [with-env]]
             [clojure.data.json :as json]
-            [babelfish-clojure-driver.parse :refer [parse-recur]])
+            [babelfish-clojure-driver.parse :refer [parse-recur parse-comments extract-comments]])
   (:import java.lang.System
            java.io.InputStreamReader
            java.io.BufferedReader)
@@ -49,6 +49,7 @@
      recur                parse-recur
      fn*                  ana/parse-fn*
      var                  ana/parse-var
+     comment              parse-comments
      #_:else              ana/parse-invoke)
    form env))
 
@@ -119,21 +120,22 @@
   if any"
   [src]
   (try
-    {:ast (map clean-ast (parse-ast src))
+    {:ast (concat (map clean-ast (parse-ast src))
+                  (extract-comments src))
      :status :ok
      :errors []}
     (catch Exception e (with-err :error (.getMessage e)))))
 
 (defn- unpack
-  "Unpacks the request from JSON or returns an error if it was not possible." 
+  "Unpacks the request from JSON or returns an error if it was not possible."
   [stream]
   (try
     (let [line (.readLine stream)]
       (if (nil? line)
         :end
-        (json/read-str line 
-                       :key-fn keyword 
-                       :eof-error? false 
+        (json/read-str line
+                       :key-fn keyword
+                       :eof-error? false
                        :eof-value :end)))
     (catch Exception e (with-err :fatal (.getMessage e)))))
 
@@ -150,19 +152,19 @@
   [stream]
   (let [req (unpack stream)]
     (pack (cond
-          (= req :end) (System/exit 0)
+            (= req :end) (System/exit 0)
 
           ;; if req has status it means the unpack failed and it was converted
           ;; to a result
-          (= (:status req) :fatal) req
+            (= (:status req) :fatal) req
 
-          :else (parse (:content req))))))
+            :else (parse (:content req))))))
 
 (defn -main
   [& args]
   (loop [r (BufferedReader. (InputStreamReader. System/in))]
     (do
-      (-> r 
-          process-req 
+      (-> r
+          process-req
           println)
       (recur r))))

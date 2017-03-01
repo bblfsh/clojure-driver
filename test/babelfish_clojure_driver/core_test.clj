@@ -3,13 +3,13 @@
             [clojure.data.json :as json]
             [babelfish-clojure-driver.core :refer :all]))
 
-(defn- err? 
+(defn- err?
   [result status]
   (do (is (= (:status result) status))
       (is (nil? (:ast result)))
       (is (= (count (:errors result)) 1))))
 
-(defn- ok? 
+(defn- ok?
   [result status]
   (do (is (= (:status result) status))
       (is (not (nil? (:ast result))))
@@ -19,7 +19,7 @@
   [s]
   (json/read-str s :key-fn keyword :eof-error? false :eof-value :end))
 
-(defn- stream 
+(defn- stream
   [req]
   (java.io.BufferedReader. (java.io.StringReader. req)))
 
