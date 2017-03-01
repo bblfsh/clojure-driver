@@ -1,6 +1,8 @@
 (ns babelfish-clojure-driver.core
-  (:refer-clojure :exclude [macroexpand-1])
-  (:require [clojure.tools.analyzer :as ana]
+  (:refer-clojure :exclude [macroexpand-1 read])
+  (:require [clojure.tools.reader :refer [read]]
+            [clojure.tools.reader.reader-types :refer [indexing-push-back-reader]]
+            [clojure.tools.analyzer :as ana]
             [clojure.tools.analyzer.jvm :as ana.jvm]
             [clojure.tools.analyzer.ast :refer [postwalk]]
             [clojure.tools.analyzer.env :refer [with-env]]
@@ -59,7 +61,7 @@
   (binding [ana/macroexpand-1 (fn [form env] form)
             ana/create-var    ana.jvm/create-var
             ana/parse         parse-forms
-            elides            {:all #{:line :column}}
+            elides            {:all #{:file}}
             ana/var?          var?]
     (with-env env
       (-> (ana/analyze form empty-env)
@@ -109,7 +111,7 @@
   "Parses all the forms in the given Clojure source code and returns a list
   with the AST of all the top level forms"
   [src]
-  (with-open [r (java.io.PushbackReader. (java.io.StringReader. src))]
+  (with-open [r (indexing-push-back-reader src)]
     (binding [*read-eval* false]
       (loop [expr (read r false :end)
              forms []]

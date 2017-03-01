@@ -25,11 +25,22 @@
 
 (deftest test-parse
   (testing "with valid source"
-    (let [result (parse "(defn foo [a b] (+ a b))")]
+    (let [result (parse "(defn foo [a b] (+ a b))")
+          m (-> result :ast :meta)]
       (ok? result :ok)))
 
+  (testing "includes positional info"
+    (let [result (parse "(defn foo [a b]\n  (+ a b))")
+          m (-> result :ast first :meta)]
+      (is (= (:status result) :ok))
+      (is (= (:line m) 1))
+      (is (= (:column m) 1))
+      (is (= (:end-line m) 2))
+      (is (= (:end-column m) 11))))
+
   (testing "with invalid source"
-    (let [result (parse "(println (+ a 1)")]
+    (let [result (parse "(println (+ a 1)")
+          m (-> result :ast :meta)]
       (err? result :error))))
 
 (deftest test-process-req
