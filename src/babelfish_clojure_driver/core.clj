@@ -4,10 +4,7 @@
             [clojure.tools.reader.reader-types :refer [indexing-push-back-reader]]
             [clojure.tools.analyzer :as ana]
             [clojure.tools.analyzer.jvm :as ana.jvm]
-            [clojure.tools.analyzer.ast :refer [postwalk]]
             [clojure.tools.analyzer.env :refer [with-env]]
-            [clojure.tools.analyzer.passes.elide-meta :refer [elides elide-meta]]
-            [clojure.tools.analyzer.passes.source-info :refer [source-info]]
             [clojure.data.json :as json]
             [babelfish-clojure-driver.parse :refer [parse-recur]])
   (:import java.lang.System
@@ -61,12 +58,9 @@
   (binding [ana/macroexpand-1 (fn [form env] form)
             ana/create-var    ana.jvm/create-var
             ana/parse         parse-forms
-            elides            {:all #{:file}}
             ana/var?          var?]
     (with-env env
-      (-> (ana/analyze form empty-env)
-          (postwalk source-info)
-          (postwalk elide-meta)))))
+      (ana/analyze form empty-env))))
 
 (defn- with-err
   "Returns an errored output"
