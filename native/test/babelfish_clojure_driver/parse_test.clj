@@ -1,6 +1,7 @@
 (ns babelfish-clojure-driver.parse-test
   (:require [clojure.test :refer :all]
-            [babelfish-clojure-driver.parse :refer :all]))
+            [babelfish-clojure-driver.parse :refer :all]
+            [babelfish-clojure-driver.core :refer [form-ast]]))
 
 (defn- assert-comment
   [node text]
@@ -39,3 +40,32 @@
         (assert-comment c1 "this is a comment")
         (assert-comment c2 "another one")
         (assert-comment c3 "yet another")))))
+
+(deftest parse-defn-test
+  (testing "defn should be expanded"
+    (let [form '(defn foo "documentation" [a b] a)
+          ast (form-ast form)]
+      (is (= :def (-> ast :op)))
+      (is (= "documentation" (-> ast :meta :doc)))
+      (let [init (:init ast)]
+        (is (= :fn (-> init :op)))
+        (is (= 2 (-> init :max-fixed-arity)))
+        (is (= 1 (-> init :methods count))))))
+
+  (testing "defn should expand multi-signature"
+    (let [form '(defn foo "documentation" ([a b] a) ([a b c] a))
+          ast (form-ast form)
+          init (:init ast)]
+      (is (= :fn (-> init :op)))
+      (is (= 3 (-> init :max-fixed-arity)))
+      (is (= 2 (-> init :methods count)))))
+
+  (testing "defn should accept attr maps"
+    (let [form '(defn foo "documentation" {:b 2} ([a b] a) ([a b c] a) {:a 1})
+          ast (form-ast form)
+          init (:init ast)]
+      (is (= :fn (-> init :op)))
+      (is (= 3 (-> init :max-fixed-arity)))
+      (is (= 1 (-> ast :meta :a)))
+      (is (= 2 (-> ast :meta :b)))
+      (is (= 2 (-> init :methods count))))))

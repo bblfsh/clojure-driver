@@ -30,13 +30,13 @@
       (ok? result :ok)))
 
   (testing "includes positional info"
-    (let [result (parse "(defn foo [a b]\n  (+ a b))")
+    (let [result (parse "(def a\n1)")
           m (-> result :ast first :meta)]
       (is (= (:status result) :ok))
       (is (= (:line m) 1))
       (is (= (:column m) 1))
       (is (= (:end-line m) 2))
-      (is (= (:end-column m) 11))))
+      (is (= (:end-column m) 3))))
 
   (testing "with invalid source"
     (let [result (parse "(println (+ a 1)")

@@ -6,7 +6,7 @@
             [clojure.tools.analyzer.jvm :as ana.jvm]
             [clojure.tools.analyzer.env :refer [with-env]]
             [clojure.data.json :as json]
-            [babelfish-clojure-driver.parse :refer [parse-recur parse-comments extract-comments]])
+            [babelfish-clojure-driver.parse :as parse])
   (:import java.lang.System
            java.io.InputStreamReader
            java.io.BufferedReader)
@@ -30,10 +30,6 @@
   ((case (first form)
      monitor-enter        ana.jvm/parse-monitor-enter
      monitor-exit         ana.jvm/parse-monitor-exit
-     clojure.core/import* ana.jvm/parse-import*
-     reify*               ana.jvm/parse-reify*
-     deftype*             ana.jvm/parse-deftype*
-     case*                ana.jvm/parse-case*
      do                   ana/parse-do
      if                   ana/parse-if
      new                  ana/parse-new
@@ -43,25 +39,16 @@
      throw                ana/parse-throw
      def                  ana/parse-def
      .                    ana/parse-dot
-     let*                 ana/parse-let*
-     letfn*               ana/parse-letfn*
-     loop*                ana/parse-loop*
-     recur                parse-recur
-     fn*                  ana/parse-fn*
+     let                  ana/parse-let*
+     letfn                parse/parse-letfn
+     defn                 parse/parse-defn
+     loop                 ana/parse-loop*
+     recur                parse/parse-recur
+     fn                   parse/parse-fn
      var                  ana/parse-var
-     comment              parse-comments
+     comment              parse/parse-comments
      #_:else              ana/parse-invoke)
    form env))
-
-(defn- ast
-  "Returns the AST of a single Clojure form without the macros expanded"
-  [form]
-  (binding [ana/macroexpand-1 (fn [form env] form)
-            ana/create-var    ana.jvm/create-var
-            ana/parse         parse-forms
-            ana/var?          var?]
-    (with-env env
-      (ana/analyze form empty-env))))
 
 (defn- with-err
   "Returns an errored output"
@@ -78,6 +65,8 @@
       (= k :env) nil
       (= k :raw-forms) nil
       (= k :var) nil
+      (= k :meta) (vector k (dissoc (:form v)
+                                    :file))
 
       (coll? k) (if (= (str (first k)) "quote")
                   (vector (str "'" (str (last k)))
@@ -102,6 +91,16 @@
 
     :else m))
 
+(defn form-ast
+  "Returns the AST of a single Clojure form without the macros expanded"
+  [form]
+  (binding [ana/macroexpand-1 (fn [form env] form)
+            ana/create-var    ana.jvm/create-var
+            ana/parse         parse-forms
+            ana/var?          var?]
+    (with-env env
+      (clean-ast (ana/analyze form empty-env)))))
+
 (defn- parse-ast
   "Parses all the forms in the given Clojure source code and returns a list
   with the AST of all the top level forms"
@@ -113,15 +112,15 @@
         (if (= :end expr)
           forms
           (recur (read r false :end)
-                 (concat forms [(ast expr)])))))))
+                 (concat forms [(form-ast expr)])))))))
 
 (defn parse
   "Parses the given Clojure source code and returns the status, ast and errors, 
   if any"
   [src]
   (try
-    {:ast (concat (map clean-ast (parse-ast src))
-                  (extract-comments src))
+    {:ast (concat (parse-ast src)
+                  (parse/extract-comments src))
      :status :ok
      :errors []}
     (catch Exception e (with-err :error (.getMessage e)))))
